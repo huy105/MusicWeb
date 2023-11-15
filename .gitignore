@@ -1,5 +1,7 @@
 # ignore folder
 __pycache__/
 plugins/
+/config.py
+/config.ini
 
 
