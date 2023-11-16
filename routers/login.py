@@ -4,7 +4,10 @@ from ..dependencies import authenticate_user, create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from ..models.models import Token
-from ..config import ACCESS_TOKEN_EXPIRE_MINUTES, conn_sql_server
+from ..utils.read_config import read_config
+
+setting = read_config('backend-setting')
+ACCESS_TOKEN_EXPIRE_MINUTES = setting['access_token_expire_minutes']
 
 router = APIRouter(
     prefix="/login",

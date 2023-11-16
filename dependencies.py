@@ -5,8 +5,18 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Depends, HTTPException, status
 from .models.models import User, UserInDB, TokenData
-from .config import ALGORITHM, SECRET_KEY, conn_sql_server
+from .utils.read_config import read_config
+import pypyodbc
 
+setting = read_config('backend-setting')
+setting_sql_server = read_config('sql-server')
+SECRET_KEY = setting["secret_key"]
+ALGORITHM = setting["algorithm"]
+server = setting_sql_server['server_name']
+database = setting_sql_server['database']
+
+connection_string = f"Driver={{SQL Server}};Server={server};Database={database}"
+conn_sql_server = pypyodbc.connect(connection_string)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login/token")
@@ -50,7 +60,7 @@ def create_access_token(data: dict, expires_delta: Union[timedelta, None] = None
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm= ALGORITHM)
     return encoded_jwt
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
@@ -61,7 +71,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     )
     
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception

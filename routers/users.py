@@ -3,7 +3,11 @@ from typing import Annotated
 from jose import JWTError, jwt
 from ..dependencies import get_current_user, oauth2_scheme
 from ..models.models import User
-from ..config import SECRET_KEY, ALGORITHM
+from ..utils.read_config import read_config
+
+setting = read_config('backend-setting')
+SECRET_KEY = setting['secret_key']
+ALGORITHM = setting['algorithm']
 
 router = APIRouter(
     tags=["users"],

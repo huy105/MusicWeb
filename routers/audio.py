@@ -1,16 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from botocore.exceptions import NoCredentialsError
-import configparser
+from ..utils.read_config import read_config
 import boto3
-import os
 
-config_path = (os.getcwd() + '\\BackEnd\\config.ini').replace("\\", "/")
-config = configparser.ConfigParser()
-config.read(config_path)
-setting = config['s3-aws']
+setting = read_config('s3-aws')
 prefix_path = setting['multimedia_path']
-
 
 router = APIRouter(
     prefix="/audio",
@@ -19,18 +14,40 @@ router = APIRouter(
 )
 
 @router.get("/get_audio", description='Get audio from cloud (S3)')
-async def get_audio():
+async def get_audio(id: str = "Aimer-1.mp3"):
+    """
+        return audio bytes by chunk using StreamingResponse
+        id: id of mp3 file
+    """
+    CHUNK_SIZE = 1024*1024
     bucket_name = setting['bucket_name']
-    object_key = prefix_path + 'Aimer-1.mp3'
-
+    object_key = prefix_path + id
+    
     try:
         s3 = boto3.client('s3', aws_access_key_id = setting['aws_access_key_id'], 
                           aws_secret_access_key = setting['aws_secret_access_key'], region_name =setting['region_name'])
         
-        response = s3.get_object(Bucket=bucket_name, Key=object_key)
-        audio_data = response['Body'].read()
+        # get info about object
+        response_head = s3.head_object(Bucket=bucket_name, Key=object_key)
+        object_size = response_head['ContentLength']    
+        num_chunks = (object_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-        return 'success'
+        # generate object by chunk to send
+        def generate_audio_by_chunk():
+            for chunk_number in range(num_chunks):
+                start_byte = chunk_number * CHUNK_SIZE
+                end_byte = min((chunk_number + 1) * CHUNK_SIZE - 1, object_size - 1)
+                range_header = f'bytes={start_byte}-{end_byte}'
+
+                response = s3.get_object(Bucket=bucket_name, Key=object_key, Range = range_header)
+                yield response['Body'].read()
+                
+        headers = {
+            'Content-Range': f'bytes {0}-{object_size}/{object_size}',
+            'Accept-Ranges': 'bytes'
+        }
+
+        return StreamingResponse(generate_audio_by_chunk(), status_code=206, media_type='audio/mp3', headers=headers)
     
     except NoCredentialsError:
         return JSONResponse({'error': 'Credentials not available or not valid. Please check your AWS credentials.'}), 500
